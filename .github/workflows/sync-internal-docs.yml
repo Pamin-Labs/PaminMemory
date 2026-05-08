@@ -37,18 +37,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          permission="$(
+          permission_payload="$(
             gh api \
-              "repos/${GITHUB_REPOSITORY}/collaborators/${GITHUB_ACTOR}/permission" \
-              --jq '.permission'
+              "repos/${GITHUB_REPOSITORY}/collaborators/${GITHUB_ACTOR}/permission"
           )"
+          role_name="$(jq -r '.role_name // .permission // "none"' <<< "${permission_payload}")"
+          can_maintain="$(jq -r '.user.permissions.maintain // false' <<< "${permission_payload}")"
 
-          case "$permission" in
-            admin|maintain)
-              echo "Actor ${GITHUB_ACTOR} has ${permission} permission."
+          case "${role_name}:${can_maintain}" in
+            admin:*|maintain:*|*:true)
+              echo "Actor ${GITHUB_ACTOR} has ${role_name} permission."
               ;;
             *)
-              echo "::error::Only admins and maintainers can run this workflow. ${GITHUB_ACTOR} has ${permission} permission."
+              echo "::error::Only admins and maintainers can run this workflow. ${GITHUB_ACTOR} has ${role_name} permission."
               exit 1
               ;;
           esac
