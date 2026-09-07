@@ -3,6 +3,10 @@
 //! Everything here is derived data. Losing it costs a reindex, not a migration,
 //! which is what makes a pre-1.0 index engine an acceptable dependency.
 
+pub mod error;
+pub mod projection;
 pub mod segmentation;
 
+pub use error::{IndexError, Result};
+pub use projection::ProjectionIndex;
 pub use segmentation::{Segmenter, detect_language};

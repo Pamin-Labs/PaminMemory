@@ -13,4 +13,9 @@ icu_segmenter = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 whatlang = { workspace = true }
+zvec-rust = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -1358,9 +1358,12 @@ dependencies = [
  "icu_segmenter",
  "pamin-core",
  "serde",
+ "tempfile",
  "thiserror 2.0.20",
  "tracing",
+ "uuid",
  "whatlang",
+ "zvec-rust",
 ]
 
 [[package]]
@@ -3248,3 +3251,18 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zvec-rust"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09da6c0c29360b764d54f8d4107174f1fb60921d25387fd433f263ec4bf19e5a"
+dependencies = [
+ "zvec-rust-sys",
+]
+
+[[package]]
+name = "zvec-rust-sys"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ea26d758a283798af569947fe9e3fb29e10cbffc5b09f50ef626cedfc4e013"

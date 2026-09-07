@@ -32,6 +32,7 @@ refinery = { version = "0.8", features = ["tokio-postgres"] }
 icu_segmenter = { version = "2", features = ["compiled_data", "auto"] }
 postgresql_embedded = "0.19"
 whatlang = "0.16"
+zvec-rust = "0.7"
 tempfile = "3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
