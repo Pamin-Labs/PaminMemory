@@ -10,3 +10,9 @@ repository.workspace = true
 [dependencies]
 pamin-core = { workspace = true }
 thiserror = { workspace = true }
+refinery = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tokio-postgres = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
