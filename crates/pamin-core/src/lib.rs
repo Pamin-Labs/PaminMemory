@@ -5,10 +5,12 @@
 //! it is the crate edited most often, so its rebuild cost sets the development
 //! loop.
 
+pub mod filter;
 pub mod id;
 pub mod ledger;
 pub mod version;
 
+pub use filter::{Rejection, SensoryFilter, Verdict};
 pub use id::{
     IndexJobId, ProjectId, SourceId, SourceSpanId, SourceVersionId, TopicId, TopicStateId,
 };
