@@ -9,4 +9,8 @@ repository.workspace = true
 
 [dependencies]
 pamin-core = { workspace = true }
+icu_segmenter = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
+whatlang = { workspace = true }
