@@ -7,6 +7,7 @@
 pub mod database;
 pub mod error;
 pub mod migrate;
+pub mod repository;
 pub mod workspace;
 
 pub use database::Database;
