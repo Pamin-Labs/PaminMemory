@@ -20,6 +20,8 @@ pamin-index = { path = "crates/pamin-index" }
 pamin-store = { path = "crates/pamin-store" }
 
 anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -30,6 +32,7 @@ refinery = { version = "0.8", features = ["tokio-postgres"] }
 postgresql_embedded = "0.19"
 tempfile = "3"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # Release profile aims at the binary-size budget gate in CI.
