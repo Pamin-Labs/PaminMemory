@@ -50,6 +50,12 @@ def measure() -> dict[str, float]:
     run("cargo", "build", "--release", "--workspace")
     cold_build_seconds = time.monotonic() - start
 
+    # A check straight after a build measures the first check, not an
+    # incremental one. Touching the most-edited crate is what makes this the
+    # number a developer actually waits on.
+    run("cargo", "check", "--workspace")
+    (ROOT / "crates" / "pamin-core" / "src" / "lib.rs").touch()
+
     start = time.monotonic()
     run("cargo", "check", "--workspace")
     incremental_check_seconds = time.monotonic() - start
