@@ -6,6 +6,12 @@ pub enum IndexError {
     #[error("projection index: {0}")]
     Engine(String),
 
+    #[error(
+        "index was built with embedding model {indexed} but {requested} was requested; \
+         run `pamin reindex` to rebuild it"
+    )]
+    ProfileMismatch { indexed: String, requested: String },
+
     #[error("index io: {0}")]
     Io(#[from] std::io::Error),
 }

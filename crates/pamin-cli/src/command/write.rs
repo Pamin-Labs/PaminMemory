@@ -2,11 +2,13 @@
 
 use anyhow::{Context, Result};
 use pamin_core::{SensoryFilter, SourceKind};
-use pamin_store::{Database, Workspace, repository};
+use pamin_index::Profile;
+use pamin_store::{Workspace, repository};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use time::OffsetDateTime;
 
+use crate::engine::Engine;
 use crate::output::Format;
 
 #[derive(clap::Args)]
@@ -31,35 +33,41 @@ struct Written {
     source_version: u32,
 }
 
-pub async fn run(workspace: &Workspace, project: &str, format: Format, args: Args) -> Result<()> {
+pub async fn run(
+    workspace: &Workspace,
+    project: &str,
+    profile: Profile,
+    format: Format,
+    args: Args,
+) -> Result<()> {
     let content = match args.content {
         Some(content) => content,
         None => std::io::read_to_string(std::io::stdin()).context("reading content from stdin")?,
     };
 
-    let mut database = Database::open(workspace).await?;
-    let project = repository::ensure_project(database.client(), project).await?;
+    let mut engine = Engine::open(workspace, project, profile).await?;
+    let project = engine.project;
 
     // Manual writes to one topic share a source, so their evidence forms a
     // single chain rather than a new source per write.
     let source = repository::ensure_source(
-        database.client(),
-        project.id,
+        engine.database.client(),
+        project,
         SourceKind::Manual,
         &format!("manual:{}", args.topic),
     )
     .await?;
 
-    let topic = repository::ensure_topic(database.client(), project.id, &args.topic).await?;
-    let current = current_content(&database, topic.id).await?;
+    let topic = repository::ensure_topic(engine.database.client(), project, &args.topic).await?;
+    let current = current_content(&engine.database, topic.id).await?;
 
     let verdict = SensoryFilter::default().judge(&content, current.as_deref());
 
     // Evidence first, always, and before the filter's verdict is acted on. That
     // ordering is what makes a rejection recoverable instead of a loss.
     let source_version = repository::append_source_version(
-        database.client(),
-        project.id,
+        engine.database.client(),
+        project,
         source,
         &content,
         &hash(&content),
@@ -68,29 +76,40 @@ pub async fn run(workspace: &Workspace, project: &str, format: Format, args: Arg
     )
     .await?;
 
+    // Detected per span, not per deployment: one workspace holds many
+    // languages, and this is what the note-language rule reads later.
+    let (language, confidence) = match pamin_index::detect_language(&content) {
+        Some((language, confidence)) => (Some(language), Some(confidence)),
+        None => (None, None),
+    };
+
     let span = repository::append_source_span(
-        database.client(),
-        project.id,
+        engine.database.client(),
+        project,
         source_version.id,
         0,
         content.len() as u32,
-        None,
-        None,
+        language.as_deref(),
+        confidence,
     )
     .await?;
 
     let state = if verdict.is_promoted() {
-        Some(
-            repository::append_topic_state(
-                database.client_mut(),
-                project.id,
-                topic.id,
-                &content,
-                span.id,
-                OffsetDateTime::now_utc(),
-            )
-            .await?,
+        let state = repository::append_topic_state(
+            engine.database.client_mut(),
+            project,
+            topic.id,
+            &content,
+            span.id,
+            OffsetDateTime::now_utc(),
         )
+        .await?;
+
+        // Index only what was promoted. Filtered content stays in the evidence
+        // layer, reachable and replayable, but off the retrieval surface, which
+        // is the whole point of filtering after persistence rather than before.
+        engine.index_state(&state)?;
+        Some(state)
     } else {
         None
     };
@@ -114,7 +133,7 @@ pub async fn run(workspace: &Workspace, project: &str, format: Format, args: Arg
 }
 
 async fn current_content(
-    database: &Database,
+    database: &pamin_store::Database,
     topic: pamin_core::TopicId,
 ) -> Result<Option<String>> {
     let versions = repository::topic_versions(database.client(), topic).await?;

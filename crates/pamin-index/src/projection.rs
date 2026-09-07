@@ -14,12 +14,14 @@ use std::path::Path;
 use std::sync::Once;
 
 use pamin_core::TopicStateId;
+
+use crate::embedding::Profile;
 use zvec_rust::{
     Collection, CollectionSchema, DataType, Doc, FieldSchema, Fts, IndexParams, MetricType,
     SearchQuery,
 };
 
-use crate::error::Result;
+use crate::error::{IndexError, Result};
 use crate::segmentation::Segmenter;
 
 const COLLECTION: &str = "memories";
@@ -41,17 +43,37 @@ pub struct ProjectionIndex {
 impl ProjectionIndex {
     /// Opens the index at `dir`, creating it if absent.
     ///
-    /// `dimensions` must match the active embedding profile. Mixing embedding
-    /// spaces in one index produces distances that mean nothing, so switching
-    /// profiles reindexes rather than appending.
-    pub fn open(dir: &Path, dimensions: u32) -> Result<Self> {
+    /// The profile is recorded on creation and checked on every reopen. Mixing
+    /// embedding spaces in one index produces distances that mean nothing, and
+    /// nothing about the resulting rankings would look wrong, so this is
+    /// enforced rather than documented. Changing profile requires a reindex.
+    pub fn open(dir: &Path, profile: Profile) -> Result<Self> {
+        std::fs::create_dir_all(dir)?;
+        let marker = dir.join("profile");
+        match std::fs::read_to_string(&marker) {
+            Ok(recorded) if recorded.trim() != profile.model_id() => {
+                return Err(IndexError::ProfileMismatch {
+                    indexed: recorded.trim().to_string(),
+                    requested: profile.model_id().to_string(),
+                });
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::write(&marker, profile.model_id())?;
+            }
+            Err(error) => return Err(error.into()),
+        }
+
+        Self::open_with_dimensions(dir, profile.dimensions())
+    }
+
+    fn open_with_dimensions(dir: &Path, dimensions: u32) -> Result<Self> {
         INITIALIZE.call_once(|| {
             let _ = zvec_rust::initialize(None);
         });
 
         std::fs::create_dir_all(dir)?;
         let path = dir.join(COLLECTION);
-        let path = path.to_string_lossy().to_string();
 
         let schema = CollectionSchema::builder(COLLECTION)
             .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
@@ -78,7 +100,15 @@ impl ProjectionIndex {
             )
             .build()?;
 
-        let collection = Collection::create_and_open(&path, &schema, None)?;
+        // The engine refuses to create over an existing path, so reopen when
+        // the collection is already there. Every command after the first opens
+        // rather than creates.
+        let path = path.to_string_lossy().to_string();
+        let collection = if std::fs::exists(&path)? {
+            Collection::open(&path, None)?
+        } else {
+            Collection::create_and_open(&path, &schema, None)?
+        };
 
         Ok(Self {
             collection,

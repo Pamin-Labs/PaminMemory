@@ -5,10 +5,12 @@
 //! library to adopt and no service to stand up.
 
 mod command;
+mod engine;
 mod output;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use pamin_index::Profile;
 use pamin_store::Workspace;
 
 #[derive(Parser)]
@@ -26,6 +28,13 @@ struct Cli {
     /// The memory namespace to operate on.
     #[arg(long, env = "PAMIN_PROJECT", global = true, default_value = "default")]
     project: String,
+
+    /// Which embedding profile to use: speed, balanced, or accuracy.
+    ///
+    /// The index records the profile it was built with, so changing this
+    /// requires `pamin reindex` rather than silently mixing vector spaces.
+    #[arg(long, env = "PAMIN_PROFILE", global = true, default_value = "balanced")]
+    profile: String,
 
     /// Emit machine-readable JSON instead of text.
     #[arg(long, global = true)]
@@ -45,6 +54,12 @@ enum Command {
 
     /// Read a topic's current or historical state.
     Read(command::read::Args),
+
+    /// Search memories across every recall channel.
+    Search(command::search::Args),
+
+    /// Rebuild the projection index from PostgreSQL.
+    Reindex(command::reindex::Args),
 
     /// Stop the local database server.
     Stop,
@@ -66,11 +81,21 @@ async fn main() -> Result<()> {
         None => Workspace::discover()?,
     };
     let format = output::Format::from_json_flag(cli.json);
+    let profile = Profile::parse(&cli.profile)
+        .ok_or_else(|| anyhow::anyhow!("unknown profile {:?}", cli.profile))?;
 
     match cli.command {
         Command::Init => command::init::run(&workspace, &cli.project, format).await,
-        Command::Write(args) => command::write::run(&workspace, &cli.project, format, args).await,
+        Command::Write(args) => {
+            command::write::run(&workspace, &cli.project, profile, format, args).await
+        }
         Command::Read(args) => command::read::run(&workspace, &cli.project, format, args).await,
+        Command::Search(args) => {
+            command::search::run(&workspace, &cli.project, profile, format, args).await
+        }
+        Command::Reindex(args) => {
+            command::reindex::run(&workspace, &cli.project, profile, format, args).await
+        }
         Command::Stop => command::stop::run(&workspace, format).await,
     }
 }

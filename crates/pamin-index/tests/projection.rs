@@ -1,13 +1,15 @@
 //! Drives the projection index against the real engine.
 
 use pamin_core::TopicStateId;
-use pamin_index::ProjectionIndex;
+use pamin_index::{Profile, ProjectionIndex};
 
-const DIMENSIONS: u32 = 4;
+const PROFILE: Profile = Profile::Speed;
 
 /// A stand-in embedding. These tests exercise the lexical channels, so the
-/// vector only has to be well formed.
-const STUB: [f32; 4] = [0.1, 0.2, 0.3, 0.4];
+/// vector only has to be the right width.
+fn stub() -> Vec<f32> {
+    vec![0.1; PROFILE.dimensions() as usize]
+}
 
 fn id(byte: u8) -> TopicStateId {
     TopicStateId(uuid::Uuid::from_bytes([byte; 16]))
@@ -16,7 +18,7 @@ fn id(byte: u8) -> TopicStateId {
 #[test]
 fn lexical_recall_works_across_languages_and_on_exact_strings() {
     let dir = tempfile::tempdir().expect("temp dir");
-    let index = ProjectionIndex::open(dir.path(), DIMENSIONS).expect("open index");
+    let index = ProjectionIndex::open(dir.path(), PROFILE).expect("open index");
 
     let english = id(1);
     let chinese = id(2);
@@ -25,22 +27,26 @@ fn lexical_recall_works_across_languages_and_on_exact_strings() {
     let identifier = id(5);
 
     index
-        .upsert(english, "the deployment pipeline runs on ci", &STUB)
+        .upsert(english, "the deployment pipeline runs on ci", &stub())
         .expect("upsert english");
     index
-        .upsert(chinese, "部署流水线运行在持续集成上", &STUB)
+        .upsert(chinese, "部署流水线运行在持续集成上", &stub())
         .expect("upsert chinese");
     index
-        .upsert(japanese, "デプロイパイプラインは東京で動いています", &STUB)
+        .upsert(
+            japanese,
+            "デプロイパイプラインは東京で動いています",
+            &stub(),
+        )
         .expect("upsert japanese");
     index
-        .upsert(thai, "ท่อการปรับใช้ทำงานอยู่", &STUB)
+        .upsert(thai, "ท่อการปรับใช้ทำงานอยู่", &stub())
         .expect("upsert thai");
     index
         .upsert(
             identifier,
             "see crates/pamin-store/src/database.rs for error E1234",
-            &STUB,
+            &stub(),
         )
         .expect("upsert identifier");
     index.flush().expect("flush");
@@ -80,9 +86,9 @@ fn lexical_recall_works_across_languages_and_on_exact_strings() {
 fn discarding_the_directory_leaves_an_empty_index() {
     let dir = tempfile::tempdir().expect("temp dir");
 
-    let index = ProjectionIndex::open(dir.path(), DIMENSIONS).expect("open index");
+    let index = ProjectionIndex::open(dir.path(), PROFILE).expect("open index");
     index
-        .upsert(id(1), "the deployment pipeline", &STUB)
+        .upsert(id(1), "the deployment pipeline", &stub())
         .expect("upsert");
     index.flush().expect("flush");
     assert!(!index.recall_segmented("deployment", 10).unwrap().is_empty());
@@ -90,7 +96,7 @@ fn discarding_the_directory_leaves_an_empty_index() {
 
     ProjectionIndex::discard(dir.path()).expect("discard");
 
-    let rebuilt = ProjectionIndex::open(dir.path(), DIMENSIONS).expect("reopen index");
+    let rebuilt = ProjectionIndex::open(dir.path(), PROFILE).expect("reopen index");
     assert!(
         rebuilt
             .recall_segmented("deployment", 10)
