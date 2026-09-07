@@ -1,0 +1,17 @@
+{
+  "comment": [
+    "Engineering budgets, enforced the same way retrieval quality gates are.",
+    "Exceeding one is a trade to record in the PR, not drift to accept silently.",
+    "Only deterministic metrics are gated. Build time is reported, not gated,",
+    "because shared CI runners make wall-clock timing too noisy to fail on."
+  ],
+  "gated": {
+    "binary_bytes": 0,
+    "total_dependencies": 0
+  },
+  "reported": [
+    "cold_build_seconds",
+    "incremental_check_seconds",
+    "target_bytes"
+  ]
+}

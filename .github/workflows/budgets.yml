@@ -1,0 +1,31 @@
+name: Budgets
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: budgets-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  budgets:
+    name: build time, target size, binary size
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: none
+
+      # No dependency cache here on purpose: this job measures the cold build.
+      - name: Measure budgets
+        run: python3 ci/budget.py "$GITHUB_STEP_SUMMARY"
