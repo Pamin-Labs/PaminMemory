@@ -48,14 +48,14 @@ Speed did not decide this. The workload is I/O against PostgreSQL, index queries
 
 ### Authoritative store: PostgreSQL
 
-The authority layer is OLTP-shaped throughout: a `SKIP LOCKED` outbox, a write-contention protocol that claims topic locks in sorted order inside a transaction, a partial unique index enforcing one current row per topic, foreign keys with cross-entity transactions, and point lookups by `(topic_id, version)`.
+The authority layer is OLTP-shaped throughout: a `SKIP LOCKED` outbox, a write-contention protocol that claims topic locks in sorted order inside a transaction, a partial index that resolves the current topic state, foreign keys with cross-entity transactions, and point lookups by `(topic_id, version)`.
 
 Columnar engines were considered and rejected for this layer. Apache DataFusion is a query engine and provides no storage authority; Lance and Parquet are columnar formats, and while Lance offers MVCC and an append-only transaction log, columnar systems write large immutable blocks, so a single-row update often rewrites a block. They would replace nothing — vectors still need `zvec`, transactions still need something else — while adding a very large dependency tree. Cost falls on **cheap** and **accurate**, both against.
 
 PostgreSQL is also the shortest path to a distributed future rather than an obstacle to it, because the ecosystem of PostgreSQL-compatible distributed engines is the largest of any database. Four rules keep that path open from the first migration:
 
 1. Every table carries `project_id` and is designed for sharding on it.
-2. Only the portable SQL subset is used: `SKIP LOCKED`, `SELECT FOR UPDATE`, partial unique indexes, foreign keys, CTEs.
+2. Only the portable SQL subset is used: `SKIP LOCKED`, `SELECT FOR UPDATE`, partial indexes, foreign keys, CTEs. A test rejects the rest.
 3. No `LISTEN/NOTIFY`, no advisory locks, no PostgreSQL-only extensions.
 4. UUID primary keys, never `SERIAL`.
 
