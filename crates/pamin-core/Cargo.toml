@@ -11,5 +11,6 @@ repository.workspace = true
 # edited most often, so its rebuild cost sets the daily development loop.
 [dependencies]
 serde = { workspace = true }
+time = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
