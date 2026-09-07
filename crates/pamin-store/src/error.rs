@@ -9,8 +9,11 @@ pub enum StoreError {
     #[error("migration failed: {0}")]
     Migration(#[from] refinery::Error),
 
-    #[error("connection to the database was lost")]
-    ConnectionLost,
+    #[error("embedded postgres: {0}")]
+    EmbeddedPostgres(#[from] postgresql_embedded::Error),
+
+    #[error("workspace io: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 /// Result alias for store operations.
