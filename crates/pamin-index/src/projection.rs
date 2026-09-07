@@ -140,6 +140,16 @@ impl ProjectionIndex {
         Ok(collect_ids(self.collection.query(&search)?))
     }
 
+    /// Semantic recall over dense embeddings.
+    ///
+    /// Returns ranks only, like the lexical channels. A cosine distance and a
+    /// BM25 score are different quantities, and keeping both as ranks is what
+    /// lets one fusion step combine them.
+    pub fn recall_vector(&self, embedding: &[f32], limit: u32) -> Result<Vec<TopicStateId>> {
+        let search = SearchQuery::new(FIELD_VECTOR, embedding, limit as i32)?;
+        Ok(collect_ids(self.collection.query(&search)?))
+    }
+
     /// Flushes buffered writes so a later query sees them.
     pub fn flush(&self) -> Result<()> {
         self.collection.flush()?;
