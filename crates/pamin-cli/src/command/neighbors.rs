@@ -19,7 +19,11 @@ pub struct Args {
     pub topic: String,
 
     /// How many edges to traverse.
-    #[arg(long, default_value_t = 2)]
+    #[arg(
+        long,
+        default_value_t = 2,
+        value_parser = clap::value_parser!(u8).range(0..=graph::MAX_DEPTH as i64)
+    )]
     pub depth: u8,
 
     /// Restrict traversal to one relationship kind. Repeatable.
@@ -61,16 +65,16 @@ pub async fn run(workspace: &Workspace, project: &str, format: Format, args: Arg
         .collect::<Result<Vec<_>>>()?;
 
     let database = Database::open(workspace).await?;
-    let project = repository::ensure_project(database.client(), project).await?;
+    let project = repository::ensure_project(database.pool(), project).await?;
 
-    let Some(topic) = repository::find_topic(database.client(), project.id, &args.topic).await?
+    let Some(topic) = repository::find_topic(database.pool(), project.id, &args.topic).await?
     else {
         bail!("no topic named {}", args.topic);
     };
 
     let at = validity::parse(args.at.as_deref(), "--at")?;
     let neighbors = graph::expand(
-        database.client(),
+        database.pool(),
         project.id,
         &[topic.id],
         &Expansion {
@@ -84,7 +88,7 @@ pub async fn run(workspace: &Workspace, project: &str, format: Format, args: Arg
     // Names are resolved in one pass rather than per neighbour, since the walk
     // can return every topic in a well-connected project.
     let names: std::collections::HashMap<_, _> =
-        repository::all_topics(database.client(), project.id)
+        repository::all_topics(database.pool(), project.id)
             .await?
             .into_iter()
             .map(|topic| (topic.id, topic.name))

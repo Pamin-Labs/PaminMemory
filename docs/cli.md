@@ -82,12 +82,20 @@ $ pamin write --topic oncall_rota "ok" --json
   "version": null,
   "promoted": false,
   "reason": "content was too short to carry a durable claim",
-  "source_version": 3
+  "source_version": 3,
+  "cascade": "applied",
+  "valid_from": null,
+  "valid_to": null
 }
 ```
 
 A `null` version means the filter held it. `source_version` is always set: the
 filter decides what reaches the retrieval surface, never what is kept.
+
+A held write does not create the topic either. Writing to a name that does not
+exist yet, and having the content held, leaves the evidence and no topic: the
+name stays unknown to `read`, `neighbors`, and the graph channel until something
+is promoted under it.
 
 `--valid-from` and `--valid-to` state when the claim is asserted to hold, as
 RFC 3339. Both are open by default:
@@ -101,6 +109,26 @@ This is separate from when the memory was written. See
 [Two kinds of time](#two-kinds-of-time).
 
 Writing also derives relationships. See [Relationships](#relationships).
+
+`cascade` says whether the projection caught up before the command returned.
+The write itself commits the evidence, the span, the state and a record of what
+the projection is owed, all in one transaction that touches only PostgreSQL;
+the index is brought up to date afterwards. `applied` means that happened here.
+`queued` means some of it is still owed and `pamin cascade` will run it — the
+memory is recorded either way. See [`pamin cascade`](#pamin-cascade).
+
+`--defer` records the memory and leaves the index to catch up later, so the
+command returns without embedding anything:
+
+```console
+$ pamin write --defer --topic release_notes "cut 1.4.0 from main"
+Wrote release_notes v1
+```
+
+The memory is committed exactly as it would be otherwise — `pamin read` and
+`pamin grep` see it immediately — and only `search` waits for the queue. Use it
+when importing in bulk and run `pamin cascade drain` once at the end: one
+rebuild of the vector graph instead of one after every write.
 
 ## `pamin read`
 
@@ -145,6 +173,12 @@ not a tuning surface for ordinary use: raising the depth costs latency for
 recall you cannot measure from outside, and an agent that wants control over
 retrieval should reach for `grep`, `read`, and `neighbors` rather than adjust
 ranking internals it has no way to evaluate.
+
+`--graph-depth` accepts 0 to 4 and refuses anything larger. A topic's
+neighbourhood grows multiplicatively with each hop and hub topics reach five
+figures of degree, so a fifth hop is not a slower query but a differently sized
+one. The walk also starts from at most 64 seeds, keeping the topics the query
+named by name ahead of the ones the lexical and vector channels supplied.
 
 ```console
 $ pamin search "how do we deploy" --limit 3
@@ -327,7 +361,8 @@ to see a derived edge that never placed high enough to surface in a search.
 Traversal ignores edge direction, since both ends of a `depends_on` are relevant
 to recall. `--kind` restricts it, repeatably. `--at <rfc3339>` follows only edges
 asserted to hold at that instant, which is how a question about the past avoids
-relationships that were only claimed later.
+relationships that were only claimed later. `--depth` accepts 0 to 4, for the
+reason given under [`pamin search`](#pamin-search).
 
 ## `pamin grep`
 
@@ -439,6 +474,63 @@ rebuilds one project — the one named by `--project` — and leaves the rest al
 A workspace created before projects had separate indexes holds a single shared
 one. Opening it would search another project's memories, and ignoring it would
 search nothing, so commands report it and `pamin reindex` migrates it.
+
+## `pamin cascade`
+
+Runs the work a write left for the projection.
+
+A write records the memory and, in the same transaction, a record of what the
+index still owes it: the embedding, the vector and lexical entries, and the
+relationships the content implies. Nothing derived happens inside that
+transaction, so a memory is never recorded without its follow-up work also
+being recorded — and a process that dies between the two leaves the work owed
+rather than lost.
+
+`pamin write` runs the queue before it returns, so ordinarily there is nothing
+here to do. These commands are for when there is: a queue left behind by a
+process that was killed, writes made with [`--defer`](#pamin-write), work
+deferred because something it needed was unavailable, and jobs that failed
+often enough to be set aside.
+
+```console
+$ pamin cascade drain
+Ran 3 jobs, 0 failed, 0 still owed
+```
+
+`drain` runs everything that is due and stops. `run` keeps going, waiting for
+new work until it is interrupted; it holds the index open for writing the whole
+time, so no other command that writes can run alongside it.
+
+Jobs name a subject rather than an event — "bring this topic up to date", not
+"this topic changed" — so running one twice leaves the same result as running
+it once, and fourteen edits to one topic leave one job rather than fourteen.
+
+A job that fails is tried again an hour later, up to eight times. After that it
+is set aside with the error that stopped it, rather than retried forever:
+
+```console
+$ pamin cascade failed
+Nothing has failed
+```
+
+```console
+$ pamin cascade failed --json
+{
+  "failed": []
+}
+```
+
+`pamin cascade replay` makes those jobs due again, for when whatever broke them
+is fixed. `pamin cascade discard` abandons them. Both report how many they
+moved:
+
+```console
+$ pamin cascade replay
+Queued 0 failed jobs to run again
+```
+
+Nothing here can lose a memory. The queue drives the index, and the index holds
+nothing PostgreSQL cannot reproduce — `pamin reindex` rebuilds it outright.
 
 ## `pamin stop`
 

@@ -5,7 +5,6 @@
 //! library to adopt and no service to stand up.
 
 mod command;
-mod engine;
 mod output;
 
 use anyhow::Result;
@@ -73,6 +72,9 @@ enum Command {
     /// Rebuild the projection index from PostgreSQL.
     Reindex(command::reindex::Args),
 
+    /// Run and inspect the work a write left for the projection.
+    Cascade(command::cascade::Args),
+
     /// Stop the local database server.
     Stop,
 }
@@ -113,6 +115,9 @@ async fn main() -> Result<()> {
         }
         Command::Reindex(args) => {
             command::reindex::run(&workspace, &cli.project, profile, format, args).await
+        }
+        Command::Cascade(args) => {
+            command::cascade::run(&workspace, &cli.project, profile, format, args).await
         }
         Command::Stop => command::stop::run(&workspace, format).await,
     }
